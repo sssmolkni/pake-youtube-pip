@@ -1,0 +1,24 @@
+# Build artifacts — distributed via GitHub Releases, not committed to the repo
+*.dmg
+*.app
+*.deb
+*.rpm
+*.msi
+*.exe
+*.AppImage
+
+# Pake / Tauri / Rust build dirs
+target/
+dist/
+src-tauri/target/
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store
+
+# Editor
+.claude/
+.vscode/
+.idea/
