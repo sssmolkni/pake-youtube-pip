@@ -40,17 +40,24 @@ no obvious way back. This adds:
   (Pake itself also binds **`Cmd+[` / `Cmd+]`** out of the box.)
 - **Mouse back/forward buttons** (buttons 4/5 on multi-button mice).
 
-### Fullscreen with controls (fixed by Pake itself)
+### Fullscreen with controls ([`fullscreen-inject.js`](fullscreen-inject.js))
 
-In older Pake builds, fullscreening a video showed only the bare `<video>` —
-no YouTube control bar, and only `Esc` to get out. That's because the HTML5
-Fullscreen API wasn't available in the WebView, so YouTube fell back to native
-element fullscreen of the raw video.
+Fullscreening a video used to show only the bare `<video>` — no YouTube
+control bar, and only `Esc` to get out. Two layers to the fix:
 
-**pake-cli ≥ 3.14.0 ships a fullscreen polyfill that fixes this** — the
-fullscreen button gives true native-window fullscreen with YouTube's full
-control bar. No injection needed here; just build with a current pake-cli
-(see below).
+1. **pake-cli ≥ 3.14.0 is required.** It ships a fullscreen polyfill that
+   bridges `requestFullscreen` to true native-window fullscreen (older
+   WebViews had no fullscreen API at all, so YouTube fell back to native
+   element fullscreen of the raw video).
+2. **The polyfill alone still loses the controls on YouTube.** YouTube
+   requests fullscreen on `document.documentElement`, and for that case
+   Pake's polyfill pins only the bare `<video>` on top of everything —
+   burying the control bar. [`fullscreen-inject.js`](fullscreen-inject.js)
+   redirects such requests to YouTube's player container (`#movie_player`),
+   so the polyfill pins the whole player, controls included.
+
+Result: the fullscreen button (and `F`) gives true fullscreen with YouTube's
+full control bar; `Esc` or the button exits.
 
 ## How it works (self-healing injection)
 
@@ -84,8 +91,8 @@ drag the app to Applications.
 ## Build it yourself
 
 The app is produced with the [Pake](https://github.com/tw93/Pake) CLI, injecting
-[`pip-inject.js`](pip-inject.js) and [`nav-inject.js`](nav-inject.js) into a
-YouTube wrapper.
+[`pip-inject.js`](pip-inject.js), [`nav-inject.js`](nav-inject.js), and
+[`fullscreen-inject.js`](fullscreen-inject.js) into a YouTube wrapper.
 
 1. Install the Pake CLI (requires Rust + Node; see Pake's docs for
    prerequisites). **Use pake-cli 3.14.0 or newer** — older versions lack the
@@ -95,10 +102,10 @@ YouTube wrapper.
    npm install -g pake-cli@latest
    ```
 
-2. Build the app, injecting both scripts:
+2. Build the app, injecting all three scripts:
 
    ```sh
-   pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js --hide-title-bar
+   pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js,fullscreen-inject.js --hide-title-bar
    ```
 
    This produces `YouTube.dmg` in the working directory.
@@ -126,7 +133,8 @@ endorsed by, or sponsored by Google or YouTube.
 ## License
 
 The original injection scripts ([`pip-inject.js`](pip-inject.js),
-[`nav-inject.js`](nav-inject.js)) are licensed
+[`nav-inject.js`](nav-inject.js), [`fullscreen-inject.js`](fullscreen-inject.js))
+are licensed
 **MIT** — see [LICENSE](LICENSE). The bundled `YouTube.dmg` is a Pake build
 output, covered by the Pake Output Exception described above, not by this MIT
 license.
