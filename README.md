@@ -1,6 +1,7 @@
 # pake-youtube-pip
 
-Adds a **Picture-in-Picture button** and an **`Alt+P` keyboard shortcut** to a
+Adds a **Picture-in-Picture button**, an **`Alt+P` keyboard shortcut**, and
+**back/forward navigation** (button + shortcuts) to a
 [Pake](https://github.com/tw93/Pake)-wrapped YouTube desktop app on macOS.
 
 ![screenshot placeholder](docs/screenshot.png)
@@ -17,26 +18,55 @@ calls the WebKit/standard PiP APIs directly, restoring that capability.
 
 ## What it does
 
+### Picture-in-Picture ([`pip-inject.js`](pip-inject.js))
+
 - Adds a PiP button to YouTube's player control bar, immediately left of the
   fullscreen button, using YouTube's own icon styling so it looks native.
 - Binds **`Alt+P`** to toggle Picture-in-Picture from anywhere in the app.
 - Toggles correctly in both directions, using `webkitSetPresentationMode`
   (WebKit) with a fallback to the standard `requestPictureInPicture()` API.
 
+### Back/forward navigation ([`nav-inject.js`](nav-inject.js))
+
+Pake's WebView has no browser chrome, so once you click into a video there is
+no obvious way back. This adds:
+
+- A **back button** in YouTube's top bar, between the hamburger menu and the
+  logo, styled like YouTube's own icon buttons. Where the WebView supports the
+  Navigation API it dims when there's nothing to go back to; otherwise it stays
+  enabled and clicking at the start of history is a harmless no-op.
+- **`Cmd+←` / `Cmd+→`** for back/forward, matching Safari. Disabled while
+  typing in a text field, where `Cmd+←` means "beginning of line".
+  (Pake itself also binds **`Cmd+[` / `Cmd+]`** out of the box.)
+- **Mouse back/forward buttons** (buttons 4/5 on multi-button mice).
+
+### Fullscreen with controls (fixed by Pake itself)
+
+In older Pake builds, fullscreening a video showed only the bare `<video>` —
+no YouTube control bar, and only `Esc` to get out. That's because the HTML5
+Fullscreen API wasn't available in the WebView, so YouTube fell back to native
+element fullscreen of the raw video.
+
+**pake-cli ≥ 3.14.0 ships a fullscreen polyfill that fixes this** — the
+fullscreen button gives true native-window fullscreen with YouTube's full
+control bar. No injection needed here; just build with a current pake-cli
+(see below).
+
 ## How it works (self-healing injection)
 
 YouTube is a single-page app that constantly rebuilds its DOM (navigating
 between videos, entering/leaving fullscreen, miniplayer, etc.), so a button
-injected once tends to disappear. [`pip-inject.js`](pip-inject.js) handles this:
+injected once tends to disappear. Both [`pip-inject.js`](pip-inject.js) and
+[`nav-inject.js`](nav-inject.js) handle this the same way:
 
 - A `setInterval` runs once a second and re-adds the button if it's missing.
   The check is a cheap `getElementById` first, so once the button exists the
-  tick is near-free; if YouTube rebuilds the control bar and drops it, the
-  button reappears within ~1 second.
-- It only injects on `/watch` pages, and picks the **visible**
+  tick is near-free; if YouTube rebuilds the control bar (or masthead) and
+  drops it, the button reappears within ~1 second.
+- The PiP script only injects on `/watch` pages, and picks the **visible**
   `.ytp-right-controls` bar (YouTube keeps several in the DOM for the main
   player, miniplayer, and inline previews).
-- The icon is built with DOM APIs (`createElementNS`), not `innerHTML`, to
+- The icons are built with DOM APIs (`createElementNS`), not `innerHTML`, to
   satisfy YouTube's Trusted Types Content-Security-Policy.
 
 ## Install (prebuilt app)
@@ -54,18 +84,21 @@ drag the app to Applications.
 ## Build it yourself
 
 The app is produced with the [Pake](https://github.com/tw93/Pake) CLI, injecting
-[`pip-inject.js`](pip-inject.js) into a YouTube wrapper.
+[`pip-inject.js`](pip-inject.js) and [`nav-inject.js`](nav-inject.js) into a
+YouTube wrapper.
 
-1. Install the Pake CLI (requires Rust + Node; see Pake's docs for prerequisites):
+1. Install the Pake CLI (requires Rust + Node; see Pake's docs for
+   prerequisites). **Use pake-cli 3.14.0 or newer** — older versions lack the
+   fullscreen polyfill, so fullscreen video loses YouTube's controls:
 
    ```sh
-   npm install -g pake-cli
+   npm install -g pake-cli@latest
    ```
 
-2. Build the app, injecting the PiP script:
+2. Build the app, injecting both scripts:
 
    ```sh
-   pake https://www.youtube.com/ --inject pip-inject.js --hide-title-bar
+   pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js --hide-title-bar
    ```
 
    This produces `YouTube.dmg` in the working directory.
@@ -92,7 +125,8 @@ endorsed by, or sponsored by Google or YouTube.
 
 ## License
 
-The original injection script ([`pip-inject.js`](pip-inject.js)) is licensed
+The original injection scripts ([`pip-inject.js`](pip-inject.js),
+[`nav-inject.js`](nav-inject.js)) are licensed
 **MIT** — see [LICENSE](LICENSE). The bundled `YouTube.dmg` is a Pake build
 output, covered by the Pake Output Exception described above, not by this MIT
 license.
