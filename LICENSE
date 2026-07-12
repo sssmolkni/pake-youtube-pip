@@ -23,7 +23,7 @@ SOFTWARE.
 ---
 
 NOTE: The MIT license above applies to the original injection scripts
-(pip-inject.js, nav-inject.js) authored by sssmolkni. It does NOT apply to
+(pip-inject.js, nav-inject.js, fullscreen-inject.js) authored by sssmolkni. It does NOT apply to
 the prebuilt macOS application (YouTube.dmg) distributed via GitHub Releases,
 which is a build output produced by Pake. See CREDITS in the README for
 Pake's licensing.
