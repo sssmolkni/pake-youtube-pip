@@ -43,21 +43,25 @@ no obvious way back. This adds:
 ### Fullscreen with controls ([`fullscreen-inject.js`](fullscreen-inject.js))
 
 Fullscreening a video used to show only the bare `<video>` — no YouTube
-control bar, and only `Esc` to get out. Two layers to the fix:
+control bar, and only `Esc` to get out. Pake ≥ 3.14.0 ships a fullscreen
+polyfill, but it doesn't help YouTube: YouTube requests fullscreen on
+`document.documentElement`, and for that case the polyfill CSS-pins and
+reparents the raw `<video>`, which buries the control bar and desyncs
+YouTube's layout (mis-sized video, masthead stuck visible). Upstream calls
+DOM-moving approaches broken for YouTube
+([Pake #1113](https://github.com/tw93/Pake/issues/1113)).
 
-1. **pake-cli ≥ 3.14.0 is required.** It ships a fullscreen polyfill that
-   bridges `requestFullscreen` to true native-window fullscreen (older
-   WebViews had no fullscreen API at all, so YouTube fell back to native
-   element fullscreen of the raw video).
-2. **The polyfill alone still loses the controls on YouTube.** YouTube
-   requests fullscreen on `document.documentElement`, and for that case
-   Pake's polyfill pins only the bare `<video>` on top of everything —
-   burying the control bar. [`fullscreen-inject.js`](fullscreen-inject.js)
-   redirects such requests to YouTube's player container (`#movie_player`),
-   so the polyfill pins the whole player, controls included.
+[`fullscreen-inject.js`](fullscreen-inject.js) instead makes that polyfill
+inert and **emulates native fullscreen with zero DOM changes**: it flips the
+Tauri window fullscreen, reports `document.fullscreenElement`, and dispatches
+`fullscreenchange` — the same signals the page gets in a real browser.
+YouTube's own engine then hides the masthead, sizes the video, shows and
+auto-hides its controls as usual. Exit works via YouTube's button, `Esc`, or
+leaving macOS fullscreen natively (a small monitor keeps the page in sync).
 
-Result: the fullscreen button (and `F`) gives true fullscreen with YouTube's
-full control bar; `Esc` or the button exits.
+Result: the fullscreen button (and `F`) behaves exactly like YouTube in a
+normal browser. Requires pake-cli ≥ 3.14.0 only because that's the version
+whose polyfill this script is written to override.
 
 ## How it works (self-healing injection)
 
