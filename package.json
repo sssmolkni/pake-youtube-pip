@@ -9,8 +9,8 @@
     "postinstall": "node scripts/patch-pake.mjs",
     "prebuild:app": "node scripts/patch-pake.mjs",
     "prebuild:app:debug": "node scripts/patch-pake.mjs",
-    "build:app": "CARGO_TARGET_DIR=\"$PWD/.cargo-target\" pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js,titlebar-inject.js --hide-title-bar",
-    "build:app:debug": "CARGO_TARGET_DIR=\"$PWD/.cargo-target\" pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js,titlebar-inject.js --hide-title-bar --debug --iterative-build",
+    "build:app": "CARGO_TARGET_DIR=\"$PWD/.cargo-target\" pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js,titlebar-inject.js --icon assets/icon.svg --hide-title-bar",
+    "build:app:debug": "CARGO_TARGET_DIR=\"$PWD/.cargo-target\" pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js,titlebar-inject.js --icon assets/icon.svg --hide-title-bar --debug --iterative-build",
     "verify:features": "CARGO_TARGET_DIR=\"$PWD/.cargo-target\" node scripts/verify-features.mjs"
   },
   "devDependencies": {

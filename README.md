@@ -125,7 +125,11 @@ npm ci          # installs pake-cli 3.15.3 and applies patches/ to it
 npm run build:app
 ```
 
-That produces `YouTube_<version>_<arch>.dmg`. The first build compiles the whole
+The app icon comes from [`assets/icon.svg`](assets/icon.svg) — Pake rasterizes
+it, applies the macOS squircle mask, and generates the `.icns`. Swap that file
+to change the icon; no other change is needed.
+
+That produces `Youtube.dmg`. The first build compiles the whole
 Tauri/Rust dependency tree and takes roughly 10 minutes; later builds are much
 faster. The Rust build cache lives in `.cargo-target/` (gitignored), so
 reinstalling `node_modules` doesn't throw it away.
