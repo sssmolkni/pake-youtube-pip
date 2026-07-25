@@ -1,8 +1,9 @@
 # pake-youtube-pip
 
-Adds a **Picture-in-Picture button**, an **`Alt+P` keyboard shortcut**, and
-**back/forward navigation** (button + shortcuts) to a
-[Pake](https://github.com/tw93/Pake)-wrapped YouTube desktop app on macOS.
+Adds a **Picture-in-Picture button**, an **`Alt+P` keyboard shortcut**,
+**back/forward navigation** (button + shortcuts), and **working fullscreen
+video** to a [Pake](https://github.com/tw93/Pake)-wrapped YouTube desktop app on
+macOS.
 
 ![screenshot placeholder](docs/screenshot.png)
 <!-- TODO: replace docs/screenshot.png with a real screenshot of the PiP button
@@ -40,35 +41,53 @@ no obvious way back. This adds:
   (Pake itself also binds **`Cmd+[` / `Cmd+]`** out of the box.)
 - **Mouse back/forward buttons** (buttons 4/5 on multi-button mice).
 
-### Fullscreen with controls ([`fullscreen-inject.js`](fullscreen-inject.js))
+### Real fullscreen (a patch to Pake, not an injection)
 
-Fullscreening a video used to show only the bare `<video>` — no YouTube
-control bar, and only `Esc` to get out. Pake ≥ 3.14.0 ships a fullscreen
-polyfill, but it doesn't help YouTube: YouTube requests fullscreen on
-`document.documentElement`, and for that case the polyfill CSS-pins and
-reparents the raw `<video>`, which buries the control bar and desyncs
-YouTube's layout (mis-sized video, masthead stuck visible). Upstream calls
-DOM-moving approaches broken for YouTube
-([Pake #1113](https://github.com/tw93/Pake/issues/1113)).
+Fullscreen in a Pake-built YouTube app has never actually worked: you either
+get the bare `<video>` filling the screen with no control bar, or — with an
+injected shim — a fullscreen *window* wrapped around an unchanged, normal-sized
+player.
 
-[`fullscreen-inject.js`](fullscreen-inject.js) instead makes that polyfill
-inert and **emulates native fullscreen with zero DOM changes**: it flips the
-Tauri window fullscreen, reports `document.fullscreenElement`, and dispatches
-`fullscreenchange` — the same signals the page gets in a real browser.
-YouTube's own engine then hides the masthead, sizes the video, shows and
-auto-hides its controls as usual. Exit works via YouTube's button, `Esc`, or
-leaving macOS fullscreen natively (a small monitor keeps the page in sync).
+**The cause is a single missing build flag in Pake, not anything about
+YouTube.** wry only enables WebKit's HTML5 Fullscreen API when it sets the
+WKWebView `fullScreenEnabled` preference, and it only does that under
+`#[cfg(feature = "fullscreen")]`. That wry feature is reachable only through
+`tauri/macos-private-api`, which Pake does not enable — so element fullscreen is
+*compiled out of the webview*, `document.fullscreenEnabled` is false, and
+`requestFullscreen()` doesn't exist. Everything else is downstream of that:
 
-Result: the fullscreen button (and `F`) behaves exactly like YouTube in a
-normal browser. Requires pake-cli ≥ 3.14.0 only because that's the version
-whose polyfill this script is written to override.
+- Pake ≥ 3.14.0 ships a JS polyfill that fakes the API by CSS-pinning and
+  **reparenting the raw `<video>`** to `<body>`. The video fills the screen but
+  YouTube's control bar is buried, and moving the element out of the player
+  breaks YouTube's own event handling — closed upstream as a known limitation
+  ([Pake #1113](https://github.com/tw93/Pake/issues/1113)).
+- An earlier version of this repo went the other way and emulated the API purely
+  in JavaScript, with no DOM changes. That can't work either: a real
+  `requestFullscreen()` also sets the browser's internal fullscreen flag, moves
+  the element into the **top layer**, makes `:fullscreen` match, and applies UA
+  sizing. None of that is reachable by redefining JS getters — so the window went
+  fullscreen and the page didn't.
+
+So this repo doesn't inject a fullscreen script at all any more. It **patches
+Pake to turn the real API on** (see [Patched Pake](#patched-pake) below) and
+makes Pake's polyfill stand down when it detects that the native API is
+available. Fullscreen then behaves exactly as it does in Safari: the video fills
+the display, the control bar fades in on mouse move and auto-hides, `F` toggles,
+`Esc` exits — handled by WebKit, with no JavaScript in the path.
+
+The only fullscreen-related script left is
+[`titlebar-inject.js`](titlebar-inject.js): with `--hide-title-bar`, Pake pins a
+20px transparent window-drag strip (`#pake-top-dom`) to the top of the viewport.
+If the fullscreen element ends up containing that strip, it keeps painting over
+YouTube's title/share overlay and swallows clicks there. One CSS rule hides it
+while anything is fullscreen; it's a no-op otherwise.
 
 ## How it works (self-healing injection)
 
 YouTube is a single-page app that constantly rebuilds its DOM (navigating
 between videos, entering/leaving fullscreen, miniplayer, etc.), so a button
-injected once tends to disappear. Both [`pip-inject.js`](pip-inject.js) and
-[`nav-inject.js`](nav-inject.js) handle this the same way:
+injected once tends to disappear. All three injected scripts handle this the
+same way:
 
 - A `setInterval` runs once a second and re-adds the button if it's missing.
   The check is a cheap `getElementById` first, so once the button exists the
@@ -94,28 +113,71 @@ drag the app to Applications.
 
 ## Build it yourself
 
-The app is produced with the [Pake](https://github.com/tw93/Pake) CLI, injecting
-[`pip-inject.js`](pip-inject.js), [`nav-inject.js`](nav-inject.js), and
-[`fullscreen-inject.js`](fullscreen-inject.js) into a YouTube wrapper.
+The app is produced with the [Pake](https://github.com/tw93/Pake) CLI. `pake-cli`
+is pinned as a local dev dependency here rather than installed globally, because
+the build applies a small patch to it (see [Patched Pake](#patched-pake)).
 
-1. Install the Pake CLI (requires Rust + Node; see Pake's docs for
-   prerequisites). **Use pake-cli 3.14.0 or newer** — older versions lack the
-   fullscreen polyfill, so fullscreen video loses YouTube's controls:
+Prerequisites: Node ≥ 18, Rust, and Xcode Command Line Tools (see
+[Pake's prerequisites](https://tauri.app/start/prerequisites/)).
 
-   ```sh
-   npm install -g pake-cli@latest
-   ```
+```sh
+npm ci          # installs pake-cli 3.15.3 and applies patches/ to it
+npm run build:app
+```
 
-2. Build the app, injecting all three scripts:
+That produces `YouTube_<version>_<arch>.dmg`. The first build compiles the whole
+Tauri/Rust dependency tree and takes roughly 10 minutes; later builds are much
+faster. The Rust build cache lives in `.cargo-target/` (gitignored), so
+reinstalling `node_modules` doesn't throw it away.
 
-   ```sh
-   pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js,fullscreen-inject.js --hide-title-bar
-   ```
+Two more commands:
 
-   This produces `YouTube.dmg` in the working directory.
+```sh
+npm run verify:features   # proves native fullscreen was compiled in
+npm run build:app:debug   # builds YouTube.app with WebKit devtools enabled
+```
 
-See the [Pake CLI documentation](https://github.com/tw93/Pake/blob/master/bin/README.md)
+`verify:features` reads cargo's build fingerprints and checks that `wry` was
+compiled with `fullscreen` and `tauri` with `macos-private-api`. If that check
+fails, the app silently falls back to Pake's polyfill and fullscreen will be
+broken again — so it's worth running after any dependency change.
+
+See the [Pake CLI documentation](https://github.com/tw93/Pake/blob/master/docs/cli-usage.md)
 for all available flags (icon, window size, user agent, etc.).
+
+## Patched Pake
+
+`pake-cli` compiles its own `src-tauri` at build time, so the only way to change
+how the app's WebView is configured is to patch the installed package.
+[`scripts/patch-pake.mjs`](scripts/patch-pake.mjs) does that automatically on
+`npm ci` and before every build. It's idempotent, and it hard-fails if `pake-cli`
+is any version other than the pinned `3.15.3`, so a dependency bump can't
+silently ship an app without the fix.
+
+Three patches, all in [`patches/`](patches):
+
+| Patch | What it does |
+|---|---|
+| `01-cargo-macos-private-api` | Adds `macos-private-api` to the `tauri` dependency features. This is what makes wry set WKWebView's `fullScreenEnabled` preference. |
+| `02-tauri-conf-macos-private-api` | Sets `app.macOSPrivateApi: true`. Not optional — `tauri-build` hard-errors if the cargo feature and this config key disagree. |
+| `03-fullscreen-native-bailout` | Makes Pake's `src/inject/fullscreen.js` no-op when the native API is present, so it stops overwriting `Element.prototype.requestFullscreen`. Non-Apple platforms are unaffected. |
+
+Patches 1 and 2 total three added lines. Patch 3 is the one that matters for
+correctness: enabling the API isn't enough on its own, because Pake's polyfill
+would otherwise replace the now-working native implementation with its own.
+
+`macos-private-api` sets a WebKit preference through an undocumented key. That
+rules out Mac App Store distribution, which is irrelevant for an unsigned `.dmg`;
+it needs no entitlement and works fine under the hardened runtime. (WebKit has
+had a public `setElementFullscreenEnabled:` since macOS 12.3, so a
+private-API-free variant is possible if it's ever needed.)
+
+**This is meant to be temporary.** Upstream tracks the symptom as
+[Pake #1113](https://github.com/tw93/Pake/issues/1113), closed as a known
+limitation of the polyfill. If Pake ever enables the feature itself, bump the
+dependency, delete `patches/` and `scripts/patch-pake.mjs`, and drop the
+`postinstall` / `prebuild:app` hooks from `package.json` — nothing else here
+depends on them.
 
 ## Credits
 
@@ -137,8 +199,8 @@ endorsed by, or sponsored by Google or YouTube.
 ## License
 
 The original injection scripts ([`pip-inject.js`](pip-inject.js),
-[`nav-inject.js`](nav-inject.js), [`fullscreen-inject.js`](fullscreen-inject.js))
-are licensed
-**MIT** — see [LICENSE](LICENSE). The bundled `YouTube.dmg` is a Pake build
-output, covered by the Pake Output Exception described above, not by this MIT
-license.
+[`nav-inject.js`](nav-inject.js), [`titlebar-inject.js`](titlebar-inject.js)),
+the build scripts in [`scripts/`](scripts), and the patches in
+[`patches/`](patches) are licensed **MIT** — see [LICENSE](LICENSE). The
+released `.dmg` is a Pake build output, covered by the Pake Output Exception
+described above, not by this MIT license.
