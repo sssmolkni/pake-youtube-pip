@@ -1,7 +1,8 @@
 # pake-youtube-pip
 
-Adds a **Picture-in-Picture button** (with an **`Alt+P` shortcut** and automatic
-window hiding), **back/forward navigation**, **working fullscreen video**, and
+Adds a **Picture-in-Picture button** (with an **`Alt+P` shortcut** that also gets
+the window out of the way), **back/forward navigation**, **working fullscreen
+video**, and
 **outbound links that open in your default browser** to a
 [Pake](https://github.com/tw93/Pake)-wrapped YouTube desktop app on macOS.
 
@@ -34,13 +35,22 @@ calls the WebKit/standard PiP APIs directly, restoring that capability.
   focus. Playback state is what tells the two buttons apart.
 
   The window is lowered rather than hidden or minimized, and that's the whole
-  design constraint. macOS only completes the PiP-to-inline transition into a
-  window that is still ordered in and rendered. With the window hidden **or**
-  minimized, *return to full picture* does nothing at all — and no
-  presentation-mode event fires either, so there's no signal to react to; the
-  transition is simply queued until the window is back on screen. Both were
-  measured against this app before settling on the window level. The trade-off:
-  on an empty desktop the window stays visible behind the PiP overlay.
+  design constraint. macOS won't hand a video back from PiP while the document
+  is hidden: `VideoPresentationInterfaceMac::requestHideAndExitPiP` runs only
+  when `m_documentIsVisible`, and otherwise parks the work in a callback that
+  fires when the document becomes visible again. *Return to full picture* then
+  does nothing at all — `pipShouldClose:` returns `NO`, so AVKit leaves the PiP
+  window up and WebKit never follows through. (The X button *looks* like it
+  works because `pipActionStop:` pauses playback before hitting the same defer.)
+  A page counts as hidden whenever its window is minimized or ordered out, so
+  neither is usable here. The trade-off: on an empty desktop the window stays
+  visible behind the PiP overlay.
+
+  A page also counts as hidden when its window is entirely covered by another
+  opaque window — which is the *normal* PiP case, since the point is to use
+  another app. That would have made the button dead most of the time, so the
+  build turns WebKit's window-occlusion detection off (see patch 6). Both
+  behaviours were measured against this app rather than assumed.
 
 ### Link handling ([`links-inject.js`](links-inject.js))
 
@@ -195,7 +205,7 @@ how the app's WebView is configured is to patch the installed package.
 is any version other than the pinned `3.15.3`, so a dependency bump can't
 silently ship an app without the fix.
 
-Five patches, all in [`patches/`](patches):
+Six patches, all in [`patches/`](patches):
 
 | Patch | What it does |
 |---|---|
@@ -205,13 +215,16 @@ Five patches, all in [`patches/`](patches):
 | `04-capabilities-window-visibility` | Adds `core:window:allow-set-always-on-bottom` / `-show` / `-set-focus` / `-unminimize` and `core:app:allow-app-show` to `capabilities/default.json`. Pake grants `minimize` and `close` but nothing that can change a window's level or bring it *back*, so without this the PiP script can't move the window at all. |
 
 | `05-drop-pake-cli-dev-deps` | Removes `devDependencies` from pake-cli's own `package.json`. Pake runs `npm install` inside its package on every build; one of those dev dependencies (`rolldown`) declares optional platform bindings that were never published, and npm 11's resolver crashes on them instead of skipping. `dist/cli.js` ships prebuilt, so none of them are needed. |
+| `06-webview-no-occlusion-detection` | Sets `_setWindowOcclusionDetectionEnabled:NO` on the `WKWebView`, so a window that is merely *covered* by another window doesn't count as a hidden page. Without it the PiP *return to full picture* button is dead whenever another app covers the window. |
 
 Patches 1 and 2 total three added lines. Patch 3 is the one that matters for
 correctness: enabling the API isn't enough on its own, because Pake's polyfill
 would otherwise replace the now-working native implementation with its own.
 Patch 4 is unrelated to fullscreen — it only widens the Tauri permission list.
 Patch 5 is pure build hygiene and can go as soon as the upstream resolution
-issue clears.
+issue clears. Patch 6 is the only one that adds Rust; like patch 1 it uses an
+undocumented WebKit selector, guarded by `respondsToSelector:` so it degrades to
+a no-op rather than crashing if it ever disappears.
 
 `macos-private-api` sets a WebKit preference through an undocumented key. That
 rules out Mac App Store distribution, which is irrelevant for an unsigned `.dmg`;
