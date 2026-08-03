@@ -1,15 +1,25 @@
 // pip.js - PiP button + Alt+P shortcut for YouTube in Pake (macOS/WebKit)
 //
-// Entering PiP also hides the app window, and leaving PiP brings it back. Pake
-// keeps the webview alive when the window goes away (macOS `hide_on_close`
-// hides instead of closing), so the video keeps playing either way; without
-// this, the full-size window just sits on top of the PiP overlay, and coming
-// back from PiP returns the video to a window you can't see.
+// Entering PiP also gets the app window out of the way, and "return to full
+// picture" brings it back. Pake keeps the WebView alive when the window goes
+// away (macOS `hide_on_close` hides instead of closing), so the video plays
+// throughout; without this the full-size window just sits on top of the PiP
+// overlay, and returning from PiP puts the video back into a window you can't
+// see.
+//
+// The window is *minimized*, not hidden. hide() orders the window out, which
+// leaves AVKit with no rendered view to return the video to: the PiP overlay's
+// "return to full picture" button then does nothing at all and no
+// presentation-mode event ever fires, so there's no way to react to it either.
+// A miniaturized window is still ordered in, so the transition completes.
 (function () {
   // Whether PiP is currently active, as far as this script is concerned. Used
-  // to make hide/show idempotent - WebKit and the standard API both fire on the
-  // same transition, and the poll below re-checks it once a second.
+  // to make minimize/restore idempotent - WebKit and the standard API both fire
+  // on the same transition, and the poll below re-checks it once a second.
   var inPiP = false;
+  // The element that went into PiP, kept so the exit path can read its paused
+  // state after the fact.
+  var pipVideo = null;
 
   function tauri() {
     return window.__TAURI__;
@@ -20,10 +30,10 @@
     return (api && api.window && api.window.getCurrentWindow && api.window.getCurrentWindow()) || null;
   }
 
-  // Hiding the window mid-fullscreen-transition leaves macOS with an empty
-  // Space, which is why Pake's own close handler exits fullscreen first. WebKit
+  // Minimizing mid-fullscreen-transition leaves macOS with an empty Space,
+  // which is why Pake's own close handler exits fullscreen first. WebKit
   // usually drops element fullscreen on PiP entry by itself, but not always.
-  async function hideAppWindow() {
+  async function minimizeAppWindow() {
     var win = appWindow();
     if (!win) return;
     try {
@@ -31,16 +41,16 @@
         await document.exitFullscreen();
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
-      await win.hide();
+      await win.minimize();
     } catch (error) {
-      console.error('Pake PiP: failed to hide window:', error);
+      console.error('Pake PiP: failed to minimize window:', error);
     }
   }
 
-  // unminimize() covers a window the user sent to the Dock; app.show() is
-  // needed on macOS because show() alone won't bring forward an application
-  // AppKit considers hidden.
-  async function showAppWindow() {
+  // show() covers a window the user closed (Pake hides rather than closes);
+  // app.show() is needed on macOS because neither call brings forward an
+  // application AppKit considers hidden.
+  async function restoreAppWindow() {
     var win = appWindow();
     if (!win) return;
     try {
@@ -54,11 +64,26 @@
     }
   }
 
-  function setPiPState(active) {
+  function setPiPState(active, video) {
     if (active === inPiP) return;
     inPiP = active;
-    if (active) hideAppWindow();
-    else showAppWindow();
+    if (active) {
+      pipVideo = video || pipVideo;
+      minimizeAppWindow();
+      return;
+    }
+
+    // The PiP overlay has two buttons and they mean opposite things: X tears
+    // PiP down and pauses, "return to full picture" hands the video back and
+    // keeps playing. Only the second one should bring the window back. Whether
+    // playback was paused is the only thing that separates them, and WebKit
+    // settles the pause a moment after the mode change - hence the delay.
+    var video_ = pipVideo;
+    pipVideo = null;
+    setTimeout(function () {
+      if (video_ && video_.paused) return;
+      restoreAppWindow();
+    }, 250);
   }
 
   function isVideoInPiP(video) {
@@ -100,10 +125,10 @@
     if (wired.has(video)) return;
     wired.add(video);
     video.addEventListener('webkitpresentationmodechanged', () => {
-      setPiPState(video.webkitPresentationMode === 'picture-in-picture');
+      setPiPState(video.webkitPresentationMode === 'picture-in-picture', video);
     });
-    video.addEventListener('enterpictureinpicture', () => setPiPState(true));
-    video.addEventListener('leavepictureinpicture', () => setPiPState(false));
+    video.addEventListener('enterpictureinpicture', () => setPiPState(true, video));
+    video.addEventListener('leavepictureinpicture', () => setPiPState(false, video));
   }
 
   function wireVideos() {
@@ -113,9 +138,11 @@
       wireVideo(videos[i]);
       if (isVideoInPiP(videos[i])) anyInPiP = true;
     }
-    // Backstop for a missed event: WebKit throttles a hidden window, so if the
-    // presentation-mode event never lands, this reconciles within a second.
-    // Only ever used to restore - entering PiP always goes through an event.
+    // Backstop for a missed event: WebKit throttles an off-screen window's
+    // timers to ~2s, so if the presentation-mode event never lands this
+    // reconciles a moment later. Only ever used on the way out of PiP -
+    // entering always goes through an event. It runs the same paused check,
+    // so it won't un-minimize the window behind a PiP the user just closed.
     if (inPiP && !anyInPiP) setPiPState(false);
   }
 

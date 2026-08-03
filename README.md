@@ -26,12 +26,20 @@ calls the WebKit/standard PiP APIs directly, restoring that capability.
 - Binds **`Alt+P`** to toggle Picture-in-Picture from anywhere in the app.
 - Toggles correctly in both directions, using `webkitSetPresentationMode`
   (WebKit) with a fallback to the standard `requestPictureInPicture()` API.
-- **Hides the app window while PiP is active**, and brings it back — shown and
-  focused — as soon as you leave PiP, however you leave it. Pake keeps the
-  WebView alive when the window goes away, so the video plays throughout. Without
-  this the full-size window just sits on top of the PiP overlay, and returning
-  from PiP puts the video back into a window you can't see. Clicking the Dock
-  icon also brings it back at any time.
+- **Minimizes the app window while PiP is active**, and brings it back — restored
+  and focused — when you press the PiP overlay's *return to full picture*
+  button. Pake keeps the WebView alive when the window goes away, so the video
+  plays throughout. Without this the full-size window just sits on top of the PiP
+  overlay, and returning from PiP puts the video back into a window you can't
+  see.
+- The overlay's other button, the **X**, means "done": it closes PiP and pauses,
+  and the window deliberately stays minimized. Click the Dock icon to get it back.
+
+  The window is minimized rather than hidden for a specific reason. Hiding it
+  orders the window out, which leaves AVKit with no rendered view to return the
+  video to — the *return to full picture* button then does nothing at all, and no
+  presentation-mode event fires either, so there's nothing to react to. A
+  miniaturized window is still ordered in, so the transition completes normally.
 
 ### Link handling ([`links-inject.js`](links-inject.js))
 
