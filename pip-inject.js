@@ -1,5 +1,73 @@
 // pip.js - PiP button + Alt+P shortcut for YouTube in Pake (macOS/WebKit)
+//
+// Entering PiP also hides the app window, and leaving PiP brings it back. Pake
+// keeps the webview alive when the window goes away (macOS `hide_on_close`
+// hides instead of closing), so the video keeps playing either way; without
+// this, the full-size window just sits on top of the PiP overlay, and coming
+// back from PiP returns the video to a window you can't see.
 (function () {
+  // Whether PiP is currently active, as far as this script is concerned. Used
+  // to make hide/show idempotent - WebKit and the standard API both fire on the
+  // same transition, and the poll below re-checks it once a second.
+  var inPiP = false;
+
+  function tauri() {
+    return window.__TAURI__;
+  }
+
+  function appWindow() {
+    var api = tauri();
+    return (api && api.window && api.window.getCurrentWindow && api.window.getCurrentWindow()) || null;
+  }
+
+  // Hiding the window mid-fullscreen-transition leaves macOS with an empty
+  // Space, which is why Pake's own close handler exits fullscreen first. WebKit
+  // usually drops element fullscreen on PiP entry by itself, but not always.
+  async function hideAppWindow() {
+    var win = appWindow();
+    if (!win) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      await win.hide();
+    } catch (error) {
+      console.error('Pake PiP: failed to hide window:', error);
+    }
+  }
+
+  // unminimize() covers a window the user sent to the Dock; app.show() is
+  // needed on macOS because show() alone won't bring forward an application
+  // AppKit considers hidden.
+  async function showAppWindow() {
+    var win = appWindow();
+    if (!win) return;
+    try {
+      await win.unminimize().catch(() => {});
+      await win.show();
+      await win.setFocus();
+      var api = tauri();
+      if (api && api.app && api.app.show) await api.app.show();
+    } catch (error) {
+      console.error('Pake PiP: failed to restore window:', error);
+    }
+  }
+
+  function setPiPState(active) {
+    if (active === inPiP) return;
+    inPiP = active;
+    if (active) hideAppWindow();
+    else showAppWindow();
+  }
+
+  function isVideoInPiP(video) {
+    return (
+      video.webkitPresentationMode === 'picture-in-picture' ||
+      document.pictureInPictureElement === video
+    );
+  }
+
   async function togglePiP() {
     try {
       const video = document.querySelector('video');
@@ -21,6 +89,34 @@
     } catch (error) {
       console.error("Pake PiP Error:", error);
     }
+  }
+
+  // YouTube swaps the <video> element on SPA navigation, so wiring has to be
+  // re-checked rather than done once. The WeakSet keeps it to one listener set
+  // per element and lets discarded elements be collected.
+  var wired = new WeakSet();
+
+  function wireVideo(video) {
+    if (wired.has(video)) return;
+    wired.add(video);
+    video.addEventListener('webkitpresentationmodechanged', () => {
+      setPiPState(video.webkitPresentationMode === 'picture-in-picture');
+    });
+    video.addEventListener('enterpictureinpicture', () => setPiPState(true));
+    video.addEventListener('leavepictureinpicture', () => setPiPState(false));
+  }
+
+  function wireVideos() {
+    var videos = document.querySelectorAll('video');
+    var anyInPiP = false;
+    for (var i = 0; i < videos.length; i++) {
+      wireVideo(videos[i]);
+      if (isVideoInPiP(videos[i])) anyInPiP = true;
+    }
+    // Backstop for a missed event: WebKit throttles a hidden window, so if the
+    // presentation-mode event never lands, this reconciles within a second.
+    // Only ever used to restore - entering PiP always goes through an event.
+    if (inPiP && !anyInPiP) setPiPState(false);
   }
 
   window.addEventListener('keydown', (e) => {
@@ -90,6 +186,11 @@
     if (controls) injectPiPButton(controls);
   }
 
-  setInterval(ensureButton, 1000);
-  ensureButton();
+  function tick() {
+    ensureButton();
+    wireVideos();
+  }
+
+  setInterval(tick, 1000);
+  tick();
 })();

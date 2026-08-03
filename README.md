@@ -1,9 +1,9 @@
 # pake-youtube-pip
 
-Adds a **Picture-in-Picture button**, an **`Alt+P` keyboard shortcut**,
-**back/forward navigation** (button + shortcuts), and **working fullscreen
-video** to a [Pake](https://github.com/tw93/Pake)-wrapped YouTube desktop app on
-macOS.
+Adds a **Picture-in-Picture button** (with an **`Alt+P` shortcut** and automatic
+window hiding), **back/forward navigation**, **working fullscreen video**, and
+**outbound links that open in your default browser** to a
+[Pake](https://github.com/tw93/Pake)-wrapped YouTube desktop app on macOS.
 
 ![screenshot placeholder](docs/screenshot.png)
 <!-- TODO: replace docs/screenshot.png with a real screenshot of the PiP button
@@ -26,6 +26,34 @@ calls the WebKit/standard PiP APIs directly, restoring that capability.
 - Binds **`Alt+P`** to toggle Picture-in-Picture from anywhere in the app.
 - Toggles correctly in both directions, using `webkitSetPresentationMode`
   (WebKit) with a fallback to the standard `requestPictureInPicture()` API.
+- **Hides the app window while PiP is active**, and brings it back — shown and
+  focused — as soon as you leave PiP, however you leave it. Pake keeps the
+  WebView alive when the window goes away, so the video plays throughout. Without
+  this the full-size window just sits on top of the PiP overlay, and returning
+  from PiP puts the video back into a window you can't see. Clicking the Dock
+  icon also brings it back at any time.
+
+### Link handling ([`links-inject.js`](links-inject.js))
+
+YouTube wraps every outbound link in a description or comment as
+`youtube.com/redirect?…&q=<encoded url>`. Pake decides internal vs. external by
+comparing root domains, so it sees `youtube.com`, calls the link internal, and
+opens the third-party site *inside the app* — where there's no browser chrome to
+get back with. The same check fails the other way for `youtu.be`: different root
+domain, so a link to a YouTube **video** gets thrown out to Safari.
+
+This unwraps the destination first and then routes on it:
+
+- **External links open in your default browser** and the app stays where it was.
+- **YouTube links stay in the app** — other videos, timecodes, channels,
+  playlists — including `youtu.be` short links, which are rewritten to
+  `/watch?v=…` with `t`/`list` preserved. Google sign-in and consent flows also
+  stay in-app so logging in still works.
+- If a navigation reaches the `/redirect` interstitial some other way (a
+  `window.open`, an SPA route), that page bails out on its own: it opens the
+  destination externally and goes back.
+- As a last resort, any page in the app that isn't YouTube gets a small
+  **"← Back to YouTube"** pill in the top-left corner.
 
 ### Back/forward navigation ([`nav-inject.js`](nav-inject.js))
 
@@ -86,7 +114,7 @@ while anything is fullscreen; it's a no-op otherwise.
 
 YouTube is a single-page app that constantly rebuilds its DOM (navigating
 between videos, entering/leaving fullscreen, miniplayer, etc.), so a button
-injected once tends to disappear. All three injected scripts handle this the
+injected once tends to disappear. All four injected scripts handle this the
 same way:
 
 - A `setInterval` runs once a second and re-adds the button if it's missing.
@@ -158,17 +186,19 @@ how the app's WebView is configured is to patch the installed package.
 is any version other than the pinned `3.15.3`, so a dependency bump can't
 silently ship an app without the fix.
 
-Three patches, all in [`patches/`](patches):
+Four patches, all in [`patches/`](patches):
 
 | Patch | What it does |
 |---|---|
 | `01-cargo-macos-private-api` | Adds `macos-private-api` to the `tauri` dependency features. This is what makes wry set WKWebView's `fullScreenEnabled` preference. |
 | `02-tauri-conf-macos-private-api` | Sets `app.macOSPrivateApi: true`. Not optional — `tauri-build` hard-errors if the cargo feature and this config key disagree. |
 | `03-fullscreen-native-bailout` | Makes Pake's `src/inject/fullscreen.js` no-op when the native API is present, so it stops overwriting `Element.prototype.requestFullscreen`. Non-Apple platforms are unaffected. |
+| `04-capabilities-window-visibility` | Adds `core:window:allow-hide` / `-show` / `-set-focus` / `-unminimize` / `-is-visible` and `core:app:allow-app-show` to `capabilities/default.json`. Pake grants `minimize` and `close` but nothing that can bring a window *back*, so without this the PiP script can't restore the window. |
 
 Patches 1 and 2 total three added lines. Patch 3 is the one that matters for
 correctness: enabling the API isn't enough on its own, because Pake's polyfill
 would otherwise replace the now-working native implementation with its own.
+Patch 4 is unrelated to fullscreen — it only widens the Tauri permission list.
 
 `macos-private-api` sets a WebKit preference through an undocumented key. That
 rules out Mac App Store distribution, which is irrelevant for an unsigned `.dmg`;
@@ -203,7 +233,8 @@ endorsed by, or sponsored by Google or YouTube.
 ## License
 
 The original injection scripts ([`pip-inject.js`](pip-inject.js),
-[`nav-inject.js`](nav-inject.js), [`titlebar-inject.js`](titlebar-inject.js)),
+[`nav-inject.js`](nav-inject.js), [`links-inject.js`](links-inject.js),
+[`titlebar-inject.js`](titlebar-inject.js)),
 the build scripts in [`scripts/`](scripts), and the patches in
 [`patches/`](patches) are licensed **MIT** — see [LICENSE](LICENSE). The
 released `.dmg` is a Pake build output, covered by the Pake Output Exception
