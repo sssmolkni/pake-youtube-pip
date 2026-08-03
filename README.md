@@ -26,20 +26,21 @@ calls the WebKit/standard PiP APIs directly, restoring that capability.
 - Binds **`Alt+P`** to toggle Picture-in-Picture from anywhere in the app.
 - Toggles correctly in both directions, using `webkitSetPresentationMode`
   (WebKit) with a fallback to the standard `requestPictureInPicture()` API.
-- **Minimizes the app window while PiP is active**, and brings it back — restored
-  and focused — when you press the PiP overlay's *return to full picture*
-  button. Pake keeps the WebView alive when the window goes away, so the video
-  plays throughout. Without this the full-size window just sits on top of the PiP
-  overlay, and returning from PiP puts the video back into a window you can't
-  see.
-- The overlay's other button, the **X**, means "done": it closes PiP and pauses,
-  and the window deliberately stays minimized. Click the Dock icon to get it back.
+- **Drops the app window behind everything else while PiP is active**, and brings
+  it back to the front when you press the PiP overlay's *return to full picture*
+  button. Without this the full-size window just sits on top of the PiP overlay.
+- The overlay's other button, the **X**, means "done with this video": it closes
+  PiP and pauses, and the window is returned to the normal level without stealing
+  focus. Playback state is what tells the two buttons apart.
 
-  The window is minimized rather than hidden for a specific reason. Hiding it
-  orders the window out, which leaves AVKit with no rendered view to return the
-  video to — the *return to full picture* button then does nothing at all, and no
-  presentation-mode event fires either, so there's nothing to react to. A
-  miniaturized window is still ordered in, so the transition completes normally.
+  The window is lowered rather than hidden or minimized, and that's the whole
+  design constraint. macOS only completes the PiP-to-inline transition into a
+  window that is still ordered in and rendered. With the window hidden **or**
+  minimized, *return to full picture* does nothing at all — and no
+  presentation-mode event fires either, so there's no signal to react to; the
+  transition is simply queued until the window is back on screen. Both were
+  measured against this app before settling on the window level. The trade-off:
+  on an empty desktop the window stays visible behind the PiP overlay.
 
 ### Link handling ([`links-inject.js`](links-inject.js))
 
@@ -194,19 +195,23 @@ how the app's WebView is configured is to patch the installed package.
 is any version other than the pinned `3.15.3`, so a dependency bump can't
 silently ship an app without the fix.
 
-Four patches, all in [`patches/`](patches):
+Five patches, all in [`patches/`](patches):
 
 | Patch | What it does |
 |---|---|
 | `01-cargo-macos-private-api` | Adds `macos-private-api` to the `tauri` dependency features. This is what makes wry set WKWebView's `fullScreenEnabled` preference. |
 | `02-tauri-conf-macos-private-api` | Sets `app.macOSPrivateApi: true`. Not optional — `tauri-build` hard-errors if the cargo feature and this config key disagree. |
 | `03-fullscreen-native-bailout` | Makes Pake's `src/inject/fullscreen.js` no-op when the native API is present, so it stops overwriting `Element.prototype.requestFullscreen`. Non-Apple platforms are unaffected. |
-| `04-capabilities-window-visibility` | Adds `core:window:allow-hide` / `-show` / `-set-focus` / `-unminimize` / `-is-visible` and `core:app:allow-app-show` to `capabilities/default.json`. Pake grants `minimize` and `close` but nothing that can bring a window *back*, so without this the PiP script can't restore the window. |
+| `04-capabilities-window-visibility` | Adds `core:window:allow-set-always-on-bottom` / `-show` / `-set-focus` / `-unminimize` and `core:app:allow-app-show` to `capabilities/default.json`. Pake grants `minimize` and `close` but nothing that can change a window's level or bring it *back*, so without this the PiP script can't move the window at all. |
+
+| `05-drop-pake-cli-dev-deps` | Removes `devDependencies` from pake-cli's own `package.json`. Pake runs `npm install` inside its package on every build; one of those dev dependencies (`rolldown`) declares optional platform bindings that were never published, and npm 11's resolver crashes on them instead of skipping. `dist/cli.js` ships prebuilt, so none of them are needed. |
 
 Patches 1 and 2 total three added lines. Patch 3 is the one that matters for
 correctness: enabling the API isn't enough on its own, because Pake's polyfill
 would otherwise replace the now-working native implementation with its own.
 Patch 4 is unrelated to fullscreen — it only widens the Tauri permission list.
+Patch 5 is pure build hygiene and can go as soon as the upstream resolution
+issue clears.
 
 `macos-private-api` sets a WebKit preference through an undocumented key. That
 rules out Mac App Store distribution, which is irrelevant for an unsigned `.dmg`;
