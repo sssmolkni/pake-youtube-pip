@@ -129,6 +129,11 @@ If the fullscreen element ends up containing that strip, it keeps painting over
 YouTube's title/share overlay and swallows clicks there. One CSS rule hides it
 while anything is fullscreen; it's a no-op otherwise.
 
+Pake also binds `dblclick` on that strip to a native fullscreen toggle, which
+isn't what a title bar does on macOS and fights with YouTube's own fullscreen.
+The same script swallows the double-click in the capture phase, before Pake's
+listener on the strip sees it, and zooms the window instead — the macOS default.
+
 ## How it works (self-healing injection)
 
 YouTube is a single-page app that constantly rebuilds its DOM (navigating
@@ -195,6 +200,28 @@ broken again — so it's worth running after any dependency change.
 
 See the [Pake CLI documentation](https://github.com/tw93/Pake/blob/master/docs/cli-usage.md)
 for all available flags (icon, window size, user agent, etc.).
+
+### If the build fails
+
+**`failed to read plugin permissions: ... No such file or directory`, naming a
+path the project no longer lives at.** `.cargo-target/` was populated at the old
+location and cargo replayed the `tauri` build script's cached (absolute) output
+directory. Force that one crate to rebuild:
+
+```sh
+CARGO_TARGET_DIR="$PWD/.cargo-target" cargo clean --manifest-path node_modules/pake-cli/src-tauri/Cargo.toml -p tauri --release --target aarch64-apple-darwin
+```
+
+**`error running bundle_dmg.sh`.** The app compiles and signs, then DMG bundling
+dies. `bundle_dmg.sh` drives Finder over AppleScript to lay out the disk-image
+window, which fails whenever the build isn't running in a session that may
+automate Finder. Tauri skips that step when `CI` is set, which is why
+`build:app` exports `CI=true`. If a run did fail here it left a disk image
+mounted — eject it before retrying:
+
+```sh
+hdiutil detach /Volumes/dmg.* -force; rm -f .cargo-target/aarch64-apple-darwin/release/bundle/macos/rw.*.dmg
+```
 
 ## Patched Pake
 
