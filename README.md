@@ -134,6 +134,19 @@ isn't what a title bar does on macOS and fights with YouTube's own fullscreen.
 The same script swallows the double-click in the capture phase, before Pake's
 listener on the strip sees it, and zooms the window instead — the macOS default.
 
+It also makes room for the window's traffic lights. Pake pads YouTube's top bar
+by 12px, which leaves the menu button's hover circle touching them, and doesn't
+pad the sidebar's own header row, so opening the sidebar jumps the menu button
+and logo back up. Both rows get a 20px inset instead, and YouTube's
+`--ytd-masthead-height` is raised to match so the page starts below the bar.
+
+The same script also repairs a degenerate saved window size. Pake restores the
+saved size with `setContentSize:`, which ignores the minimum size, so a stale
+2×2 entry in `~/Library/Application Support/com.pake.<id>/.window-state.json`
+launches the app with no visible window. Anything under 400×300 is reset to
+1200×780 and centred (patch 4 grants the `set-size` and `center` permissions
+for it).
+
 ## How it works (self-healing injection)
 
 YouTube is a single-page app that constantly rebuilds its DOM (navigating

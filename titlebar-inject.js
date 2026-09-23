@@ -5,7 +5,7 @@
 // z-index:99999) carrying -webkit-app-region: drag and a startDragging()
 // mousedown handler, so the frameless window can still be moved.
 //
-// Two things need fixing there.
+// Four things need fixing here.
 //
 // 1. YouTube requests fullscreen on document.documentElement, so that strip is
 //    a descendant of the fullscreen element and keeps painting in fullscreen -
@@ -19,16 +19,40 @@
 //    macOS - a double-click there zooms the window - and it collides with
 //    YouTube's own fullscreen, which is now driven by WebKit. Swallow the
 //    event and zoom instead.
+//
+// 3. The traffic lights float over the page (y 8-24pt). Pake's style.js pads
+//    YouTube's masthead by 12px to make room, which leaves the guide button's
+//    40px hover circle touching them, and it doesn't pad the guide drawer's
+//    own header row, so opening the guide jumps the button and logo back up.
+//    Use one inset for both rows and tell YouTube the masthead is taller, so
+//    the page, mini guide and drawer items all start below it.
+//
+// 4. Guard against a degenerate restored window size. Pake restores the
+//    saved size with NSWindow setContentSize:, which ignores the minimum
+//    size, so a stale 2x2 entry in .window-state.json makes the app launch
+//    with no visible window at all.
 (function () {
   if (window.__pakeYtTitlebarInjected) return;
   window.__pakeYtTitlebarInjected = true;
 
   var STRIP_ID = 'pake-top-dom';
   var STYLE_ID = 'pake-yt-titlebar-style';
+  var TITLE_BAR_INSET = 20;
+  var MASTHEAD_HEIGHT = 56 + TITLE_BAR_INSET;
   var CSS = [
     ':fullscreen #pake-top-dom,',
     ':-webkit-full-screen #pake-top-dom {',
     '  display: none !important;',
+    '}',
+    'html, ytd-app {',
+    '  --ytd-masthead-height: ' + MASTHEAD_HEIGHT + 'px !important;',
+    '}',
+    'ytd-masthead > #container.ytd-masthead,',
+    'tp-yt-app-drawer #header {',
+    '  padding-top: ' + TITLE_BAR_INSET + 'px !important;',
+    '}',
+    '#background.ytd-masthead {',
+    '  height: ' + MASTHEAD_HEIGHT + 'px !important;',
     '}',
   ].join('\n');
 
@@ -52,6 +76,19 @@
     var api = window.__TAURI__;
     return (api && api.window && api.window.getCurrentWindow && api.window.getCurrentWindow()) || null;
   }
+
+  function fixDegenerateWindowSize() {
+    if (window.top !== window) return;
+    if (window.innerWidth >= 400 && window.innerHeight >= 300) return;
+    var api = window.__TAURI__;
+    var win = tauriWindow();
+    if (!win || !api.dpi || !api.dpi.LogicalSize) return;
+    win.setSize(new api.dpi.LogicalSize(1200, 780)).then(function () {
+      return win.center();
+    }).catch(function () {});
+  }
+
+  fixDegenerateWindowSize();
 
   // Pake's handler sits on the strip itself, so a capture-phase listener on
   // the document runs first and can stop the event before it ever reaches it.
