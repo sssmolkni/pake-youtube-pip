@@ -19,7 +19,7 @@ const patchDir = path.join(repoRoot, 'patches');
 
 // The patches carry file context from this exact release. A version bump must
 // fail loudly rather than silently produce an app without the fix.
-const EXPECTED_VERSION = '3.15.3';
+const EXPECTED_VERSION = '3.17.1';
 
 function fail(message) {
   console.error(`\n  patch-pake: ${message}\n`);

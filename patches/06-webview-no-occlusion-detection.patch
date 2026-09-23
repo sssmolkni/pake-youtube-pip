@@ -1,20 +1,21 @@
 diff --git a/src-tauri/src/app/window.rs b/src-tauri/src/app/window.rs
-index ff78e51..2de830c 100644
+index 9502e19..d4b1c31 100644
 --- a/src-tauri/src/app/window.rs
 +++ b/src-tauri/src/app/window.rs
-@@ -583,7 +583,51 @@ fn build_window(
+@@ -791,6 +791,9 @@ fn build_window(
  
-     window_builder = window_builder.on_navigation(|_| true);
+     let window = window_builder.build()?;
  
--    window_builder.build()
-+    let window = window_builder.build()?;
-+
 +    #[cfg(target_os = "macos")]
 +    disable_window_occlusion_detection(&window);
 +
-+    Ok(window)
-+}
-+
+     // A shared identifier alone leaves each NSWindow in automatic mode.
+     // Prefer tabs only for Cmd+N clones so they join the main window's tab
+     // group. The main window stays bar-less until another tab exists, while
+@@ -846,6 +849,45 @@ fn build_window(
+     Ok(window)
+ }
+ 
 +/// Stop WebKit from treating a covered window as a hidden page.
 +///
 +/// macOS refuses to hand a video back from Picture-in-Picture while the
@@ -52,6 +53,8 @@ index ff78e51..2de830c 100644
 +            }
 +        }
 +    });
- }
- 
- #[cfg(all(test, target_os = "windows"))]
++}
++
+ pub fn save_last_url(app: &AppHandle) {
+     let Some(window) = app.get_webview_window("pake") else {
+         return;

@@ -173,7 +173,7 @@ Prerequisites: Node ≥ 18, Rust, and Xcode Command Line Tools (see
 [Pake's prerequisites](https://tauri.app/start/prerequisites/)).
 
 ```sh
-npm ci          # installs pake-cli 3.15.3 and applies patches/ to it
+npm ci          # installs pake-cli 3.17.1 and applies patches/ to it
 npm run build:app
 ```
 
@@ -229,7 +229,7 @@ hdiutil detach /Volumes/dmg.* -force; rm -f .cargo-target/aarch64-apple-darwin/r
 how the app's WebView is configured is to patch the installed package.
 [`scripts/patch-pake.mjs`](scripts/patch-pake.mjs) does that automatically on
 `npm ci` and before every build. It's idempotent, and it hard-fails if `pake-cli`
-is any version other than the pinned `3.15.3`, so a dependency bump can't
+is any version other than the pinned `3.17.1`, so a dependency bump can't
 silently ship an app without the fix.
 
 Six patches, all in [`patches/`](patches):

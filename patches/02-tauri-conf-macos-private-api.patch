@@ -1,9 +1,9 @@
 diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json
-index 4ade40b..de42b5f 100644
+index 9e82656..33c0c1f 100644
 --- a/src-tauri/tauri.conf.json
 +++ b/src-tauri/tauri.conf.json
 @@ -4,6 +4,7 @@
-   "version": "3.15.3",
+   "version": "3.17.1",
    "app": {
      "withGlobalTauri": true,
 +    "macOSPrivateApi": true,

@@ -14,7 +14,7 @@
     "verify:features": "CARGO_TARGET_DIR=\"$PWD/.cargo-target\" node scripts/verify-features.mjs"
   },
   "devDependencies": {
-    "pake-cli": "3.15.3"
+    "pake-cli": "3.17.1"
   },
   "engines": {
     "node": ">=18"

@@ -1,8 +1,8 @@
 diff --git a/package.json b/package.json
-index 80ad1bd..2525506 100644
+index 763d32e..ab3345e 100644
 --- a/package.json
 +++ b/package.json
-@@ -69,26 +69,6 @@
+@@ -68,25 +68,6 @@
      "tmp-promise": "^3.0.3",
      "update-notifier": "^7.3.1"
    },
@@ -17,7 +17,6 @@ index 80ad1bd..2525506 100644
 -    "@types/prompts": "^2.4.9",
 -    "@types/tmp": "^0.2.6",
 -    "@types/update-notifier": "^6.0.8",
--    "app-root-path": "^3.1.0",
 -    "cross-env": "^10.1.0",
 -    "prettier": "^3.8.1",
 -    "rollup": "^4.59.0",
@@ -28,4 +27,4 @@ index 80ad1bd..2525506 100644
 -  },
    "pnpm": {
      "overrides": {
-       "sharp": "^0.34.5",
+       "sharp": "^0.35.0",
