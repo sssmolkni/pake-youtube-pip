@@ -1,0 +1,22 @@
+{
+  "name": "pake-youtube-pip",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PiP, navigation and native fullscreen for a Pake-wrapped YouTube desktop app",
+  "license": "MIT",
+  "scripts": {
+    "postinstall": "node scripts/patch-pake.mjs",
+    "prebuild:app": "node scripts/patch-pake.mjs",
+    "prebuild:app:debug": "node scripts/patch-pake.mjs",
+    "build:app": "CI=true CARGO_TARGET_DIR=\"$PWD/.cargo-target\" pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js,links-inject.js,titlebar-inject.js --icon assets/icon.svg --hide-title-bar",
+    "build:app:debug": "CI=true CARGO_TARGET_DIR=\"$PWD/.cargo-target\" pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js,links-inject.js,titlebar-inject.js --icon assets/icon.svg --hide-title-bar --debug --iterative-build",
+    "verify:features": "CARGO_TARGET_DIR=\"$PWD/.cargo-target\" node scripts/verify-features.mjs"
+  },
+  "devDependencies": {
+    "pake-cli": "3.17.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

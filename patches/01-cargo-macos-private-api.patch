@@ -1,0 +1,17 @@
+diff --git a/src-tauri/Cargo.toml b/src-tauri/Cargo.toml
+index 795bb8a..8ade77e 100644
+--- a/src-tauri/Cargo.toml
++++ b/src-tauri/Cargo.toml
+@@ -25,6 +25,12 @@ tauri = { version = "2.10.2", features = [
+   "tray-icon",
+   "image-ico",
+   "image-png",
++  # Enables wry's `fullscreen` feature, which sets the WKWebView
++  # `fullScreenEnabled` preference. Without it the HTML5 Fullscreen API is
++  # compiled out of the webview entirely and `src/inject/fullscreen.js` has to
++  # fake it. Must stay in sync with `app.macOSPrivateApi` in tauri.conf.json —
++  # tauri-build hard-errors when the two disagree.
++  "macos-private-api",
+ ] }
+ tauri-plugin-window-state = "2.4.1"
+ tauri-plugin-oauth = "2.0.0"

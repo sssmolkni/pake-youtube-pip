@@ -1,0 +1,60 @@
+diff --git a/src-tauri/src/app/window.rs b/src-tauri/src/app/window.rs
+index 9502e19..d4b1c31 100644
+--- a/src-tauri/src/app/window.rs
++++ b/src-tauri/src/app/window.rs
+@@ -791,6 +791,9 @@ fn build_window(
+ 
+     let window = window_builder.build()?;
+ 
++    #[cfg(target_os = "macos")]
++    disable_window_occlusion_detection(&window);
++
+     // A shared identifier alone leaves each NSWindow in automatic mode.
+     // Prefer tabs only for Cmd+N clones so they join the main window's tab
+     // group. The main window stays bar-less until another tab exists, while
+@@ -846,6 +849,45 @@ fn build_window(
+     Ok(window)
+ }
+ 
++/// Stop WebKit from treating a covered window as a hidden page.
++///
++/// macOS refuses to hand a video back from Picture-in-Picture while the
++/// document is hidden: `VideoPresentationInterfaceMac::requestHideAndExitPiP`
++/// only runs when `m_documentIsVisible`, and otherwise stashes the work in a
++/// callback that fires whenever the document becomes visible again. The PiP
++/// overlay's "return to full picture" button then does nothing at all - it
++/// returns NO from `pipShouldClose:`, so AVKit keeps the window open and
++/// WebKit never follows through.
++///
++/// A page counts as hidden not just when its window is minimized or ordered
++/// out, but also when the window is entirely covered by another opaque window
++/// (`PageClientImpl::isViewVisible` checks `NSWindowOcclusionStateVisible`).
++/// That is the normal case for Picture-in-Picture - the whole point is to use
++/// another app - so leaving occlusion detection on makes the button dead most
++/// of the time. Turning it off keeps the page visible while covered.
++///
++/// A minimized or closed window still reports hidden, which is what we want:
++/// the page should throttle then, and there is no way around it in any case.
++#[cfg(target_os = "macos")]
++fn disable_window_occlusion_detection(window: &WebviewWindow) {
++    use objc2::runtime::{AnyObject, Bool};
++    use objc2::{msg_send, sel};
++
++    let _ = window.with_webview(|webview| {
++        let wk = webview.inner() as *mut AnyObject;
++        if wk.is_null() {
++            return;
++        }
++        unsafe {
++            let selector = sel!(_setWindowOcclusionDetectionEnabled:);
++            let responds: Bool = msg_send![wk, respondsToSelector: selector];
++            if responds.as_bool() {
++                let _: () = msg_send![wk, _setWindowOcclusionDetectionEnabled: Bool::NO];
++            }
++        }
++    });
++}
++
+ pub fn save_last_url(app: &AppHandle) {
+     let Some(window) = app.get_webview_window("pake") else {
+         return;

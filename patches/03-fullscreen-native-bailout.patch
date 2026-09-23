@@ -1,0 +1,43 @@
+diff --git a/src-tauri/src/inject/fullscreen.js b/src-tauri/src/inject/fullscreen.js
+index c9f2485..1c52cf7 100644
+--- a/src-tauri/src/inject/fullscreen.js
++++ b/src-tauri/src/inject/fullscreen.js
+@@ -9,6 +9,38 @@
+   if (window.__PAKE_FULLSCREEN_POLYFILL__) return;
+   window.__PAKE_FULLSCREEN_POLYFILL__ = true;
+ 
++  // Capture the native capability here, at document-start script evaluation,
++  // before the page or this polyfill itself can shadow these members (the
++  // polyfill below redefines `document.fullscreenEnabled` to always return
++  // true, so this check has to happen first).
++  //
++  // WebKit gates Element.requestFullscreen, Document.fullscreenEnabled and
++  // Document.exitFullscreen behind the FullScreenEnabled setting, so when the
++  // setting is off they are absent rather than false. wry only turns that
++  // setting on when Tauri is built with the `macos-private-api` feature. When
++  // the real API is available the polyfill must stay out of the way: sites like
++  // YouTube drive their own fullscreen layout off the browser's fullscreen
++  // algorithm (top layer, :fullscreen, UA sizing), none of which can be
++  // emulated from JavaScript — and reparenting the video to fake it breaks
++  // their control bar (#1113).
++  const nativeElementFullscreen =
++    typeof Element !== "undefined" &&
++    typeof Element.prototype.requestFullscreen === "function" &&
++    typeof document.exitFullscreen === "function" &&
++    document.fullscreenEnabled === true;
++
++  // Windows (WebView2) and Linux (WebKitGTK) also advertise the API, but there
++  // the element only fills the webview and the OS window still has to be
++  // flipped by hand, so the polyfill stays in charge on those platforms.
++  const applePlatform = /mac|iphone|ipad/i.test(
++    (navigator.userAgentData && navigator.userAgentData.platform) ||
++      navigator.platform ||
++      navigator.userAgent,
++  );
++
++  window.__PAKE_NATIVE_FULLSCREEN__ = nativeElementFullscreen && applePlatform;
++  if (window.__PAKE_NATIVE_FULLSCREEN__) return;
++
+   function initFullscreenPolyfill() {
+     if (!window.__TAURI__ || !document.head) {
+       setTimeout(initFullscreenPolyfill, 100);

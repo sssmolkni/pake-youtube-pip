@@ -11,6 +11,7 @@
 target/
 dist/
 src-tauri/target/
+.cargo-target/
 
 # Node
 node_modules/
