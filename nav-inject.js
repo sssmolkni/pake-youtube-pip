@@ -29,6 +29,8 @@
     if (key !== 'ArrowLeft' && key !== 'ArrowRight') return;
     if (isEditingText(e.target)) return;
     e.preventDefault();
+    // Swallow the key, but only navigate once per press, not per auto-repeat.
+    if (e.repeat) return;
     if (key === 'ArrowLeft') goBack();
     else goForward();
   }, true);

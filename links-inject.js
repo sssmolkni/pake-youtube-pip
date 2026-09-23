@@ -77,7 +77,23 @@
     return watch.href;
   }
 
+  // The destination comes out of a query string, so it can be any scheme -
+  // and on the /redirect page it is acted on without a click. Only hand the
+  // OS web and mail links; anything else (file:, custom app schemes) is dropped
+  // rather than trusting the shell plugin's scope to catch it.
+  var EXTERNAL_PROTOCOLS = ['http:', 'https:', 'mailto:'];
+
   function openExternally(href) {
+    var protocol;
+    try {
+      protocol = new URL(href).protocol;
+    } catch (error) {
+      return;
+    }
+    if (EXTERNAL_PROTOCOLS.indexOf(protocol) === -1) {
+      console.warn('Pake links: refusing to open non-web link externally:', href);
+      return;
+    }
     var invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
     if (!invoke) {
       console.warn('Pake links: Tauri invoke unavailable, cannot open', href);

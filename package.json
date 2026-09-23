@@ -11,7 +11,8 @@
     "prebuild:app:debug": "node scripts/patch-pake.mjs",
     "build:app": "CI=true CARGO_TARGET_DIR=\"$PWD/.cargo-target\" pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js,links-inject.js,titlebar-inject.js --icon assets/icon.svg --hide-title-bar",
     "build:app:debug": "CI=true CARGO_TARGET_DIR=\"$PWD/.cargo-target\" pake https://www.youtube.com/ --inject pip-inject.js,nav-inject.js,links-inject.js,titlebar-inject.js --icon assets/icon.svg --hide-title-bar --debug --iterative-build",
-    "verify:features": "CARGO_TARGET_DIR=\"$PWD/.cargo-target\" node scripts/verify-features.mjs"
+    "verify:features": "CARGO_TARGET_DIR=\"$PWD/.cargo-target\" node scripts/verify-features.mjs",
+    "check": "for f in *.js scripts/*.mjs; do node --check \"$f\" || exit 1; done"
   },
   "devDependencies": {
     "pake-cli": "3.17.1"
