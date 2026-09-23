@@ -199,11 +199,12 @@ Tauri/Rust dependency tree and takes roughly 10 minutes; later builds are much
 faster. The Rust build cache lives in `.cargo-target/` (gitignored), so
 reinstalling `node_modules` doesn't throw it away.
 
-Two more commands:
+Three more commands:
 
 ```sh
 npm run verify:features   # proves native fullscreen was compiled in
 npm run build:app:debug   # builds YouTube.app with WebKit devtools enabled
+npm run check             # syntax-checks every script (also run by CI)
 ```
 
 `verify:features` reads cargo's build fingerprints and checks that `wry` was

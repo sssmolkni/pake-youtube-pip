@@ -86,6 +86,16 @@
     }
   }
 
+  // Window-level changes run strictly one after another. Both directions await
+  // (the fullscreen exit below, the settle delay on the way out), so without
+  // this a PiP closed within those few hundred ms would have its "raise" land
+  // first and the stale "sink" land after it - leaving the window buried.
+  var windowOps = Promise.resolve();
+
+  function queueWindowOp(op) {
+    windowOps = windowOps.then(op, op);
+  }
+
   // Sinking the window mid-fullscreen-transition confuses macOS, which is why
   // Pake's own close handler exits fullscreen first. WebKit usually drops
   // element fullscreen on PiP entry by itself, but not always.
@@ -97,6 +107,9 @@
         await document.exitFullscreen();
         await delay(300);
       }
+      // PiP may already be over; the queued raise will run next either way,
+      // but there is no point sinking a window it has to pull straight back.
+      if (!inPiP) return;
       await win.setAlwaysOnBottom(true);
     } catch (error) {
       console.error('Pake PiP: failed to lower window:', error);
@@ -135,12 +148,14 @@
     inPiP = active;
     if (active) {
       pipVideo = video || pipVideo;
-      sinkWindow();
+      queueWindowOp(sinkWindow);
       return;
     }
     var exited = pipVideo;
     pipVideo = null;
-    raiseWindow(exited);
+    queueWindowOp(function () {
+      return raiseWindow(exited);
+    });
   }
 
   // YouTube swaps the <video> element on SPA navigation, so wiring has to be
@@ -184,7 +199,9 @@
   }
 
   window.addEventListener('keydown', function (e) {
-    if (!e.altKey || e.code !== 'KeyP') return;
+    if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || e.code !== 'KeyP') return;
+    // Holding the keys would otherwise flip PiP on and off at key-repeat rate.
+    if (e.repeat) return;
     // Alt+P is a printable character on macOS; leave it alone while typing.
     if (isEditingText(e.target)) return;
     e.preventDefault();
@@ -228,7 +245,9 @@
     var pipButton = document.createElement('button');
     pipButton.id = 'pake-pip-btn';
     pipButton.className = 'ytp-button';
+    pipButton.type = 'button';
     pipButton.title = 'Picture in Picture (Alt+P)';
+    pipButton.setAttribute('aria-label', 'Picture in Picture');
     pipButton.appendChild(buildPiPIcon());
     pipButton.addEventListener('click', togglePiP);
 
