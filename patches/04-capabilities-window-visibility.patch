@@ -1,8 +1,8 @@
 diff --git a/src-tauri/capabilities/default.json b/src-tauri/capabilities/default.json
-index ddc44b5..5a82f12 100644
+index 685fcda..ce972a6 100644
 --- a/src-tauri/capabilities/default.json
 +++ b/src-tauri/capabilities/default.json
-@@ -17,6 +17,13 @@
+@@ -24,6 +24,13 @@
      "core:window:allow-maximize",
      "core:window:allow-minimize",
      "core:window:allow-close",
@@ -14,5 +14,5 @@ index ddc44b5..5a82f12 100644
 +    "core:window:allow-center",
 +    "core:app:allow-app-show",
      "core:webview:allow-internal-toggle-devtools",
+     "core:webview:allow-print",
      "notification:allow-is-permission-granted",
-     "notification:allow-notify",
